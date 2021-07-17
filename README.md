@@ -2,7 +2,7 @@
 ### Dataset generation code for modulation classification
 
 
-##### ** Instructions to run the code.**
+##### **Instructions to run the code.**
 
 1. Copy the files to a folder.
 2. Copy the analog source .wav file from this [link](https://drive.google.com/file/d/1O6LmLO2kw9b_nTPl7z7EthvC0HpTZ-Iz/view?usp=sharing)
