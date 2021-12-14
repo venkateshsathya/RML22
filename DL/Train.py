@@ -10,7 +10,7 @@ import datetime
 import torch.nn as nn
 from GRU_AMC import GRU_AMC
 import torch
-from Train_LRScheduler import train_model
+from TrainHelper import train_model
 from sklearn.model_selection import train_test_split
 from ModelDefinition import ModelDefinition
 import os
