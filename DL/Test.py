@@ -1,4 +1,4 @@
-%reset -f
+
 import sys
 sys.path.insert(1, '/home/vesathya/ModulationClassification/ModelClassDefinitions/')
 sys.path.insert(1, '/home/vesathya/ModulationClassification/Mainfiles_Sep2020/')
