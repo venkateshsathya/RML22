@@ -3,8 +3,6 @@ print("The way you run teh file is: python filename GPUID Datasetname")
 import sys
 
 # Inserting the paths below since the train file and model definition files are in the below folders.
-sys.path.insert(1, '/home/vesathya/ModulationClassification/ModelClassDefinitions/')
-sys.path.insert(1, '/home/vesathya/ModulationClassification/Mainfiles_Sep2020/')
 import numpy as np
 import pickle
 import datetime
@@ -14,7 +12,7 @@ from GRU_AMC import GRU_AMC
 import torch
 from Train_LRScheduler import train_model
 from sklearn.model_selection import train_test_split
-from ModulationPredictionCNN128_Nov9th2021 import ModulationPredictionCNN128_Nov9th2021
+from ModelDefinition import ModelDefinition
 import os
 import matplotlib.pyplot as plt
 import logging
@@ -128,7 +126,7 @@ for initialize_type in initializer_list:
                 data = X[:, :, 0:L]
                 print('data.shape: ', data.shape)
                 del dataset, X  # deleting large arrays to free up space in RAM.
-                modelclass = ModulationPredictionCNN128_Nov9th2021
+                modelclass = ModelDefinition
 
 
                 def loadSplitTrain(modelclass, Savemodelfile_location, Savemodelfilename, data, label, TrainParams):
