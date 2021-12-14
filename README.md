@@ -6,7 +6,7 @@
 
 1. Copy the files to a folder.
 2. Copy the analog source .wav file from this [link](https://drive.google.com/file/d/1O6LmLO2kw9b_nTPl7z7EthvC0HpTZ-Iz/view?usp=sharing)
-3. Create a folder named "source_material" and push the files gutenberg_shakespeare.txt and audio_source.wav to this folder.
+3. Create a folder named "source_material" and push the file audio_source.wav to this folder.
 4. *$python Datasetgeneration_Fast.py* generates four types of datasets for the following SNR and modulation types. 1000 frames are generated per modulation per SNR.
 5. The four types of datasets are clean(no artifacts), with thermal noise only (AWGN), with thermal noise and clock effects(SRO/CFO) and the final one includes fading on top of all other artifacts.
 
