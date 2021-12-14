@@ -1,10 +1,7 @@
 import sys
-
-sys.path.insert(1,
-                '/home/vesathya/ModulationClassification/Aug2020/Code/JournalPaperSNRPartitioning/CFOSweep/DatasetGeneration_GnuRadio/AllertonDataGeneration/')
-
 from transmitters import transmitters
-from source_alphabet_New import source_alphabet
+from source_alphabet import source_alphabet
+from clockArtifacts import *
 # import analyze_stats
 from gnuradio import channels, gr, blocks, analog
 import numpy as np
@@ -16,268 +13,258 @@ import time
 from itertools import product
 import pickle
 import datetime
+import math
 
 
-# clockeffects_dict{'CFOMaxdev'}=500
-# # Say signal CF is 900MHZ - LO freq is 900MHZ. The CFOMax dev at 900MHz is 500Hz.
-# #The ADC clocks rates from datasheet of N310 is 122.88MHz.
-# # SRO Max dev is therefore calculated as 500*122.88/900 = 68.27 = 70Hz approx.
-# clockeffects_dict{'SROMaxdev'}=70
-# clockeffects_dict{'SROstddev'}=0.01
-# clockeffects_dict{'CFOstddev'}=0.01
-
-def clockEffects(samples, clockeffects_dict, samp_rate, seed):
-    np.random.seed(seed)  # setting the random seed
-    # To check if the seed has been set, use the command np.random.get_state()[1][0]
-    Ts = 1 / samp_rate  # sample time
-    samples_length = samples.shape[0]
-    energy = np.sum((np.abs(samples)))
-    samples = samples / energy
-    ferr_bias_CFO = np.random.uniform(-clockeffects_dict['CFOMaxdev'], clockeffects_dict['CFOMaxdev'])
-    clockerror_randomsamples = np.random.randn(samples_length, )
-    CFO_cum = np.cumsum(clockerror_randomsamples * clockeffects_dict['CFOstddev']) + ferr_bias_CFO
-    n = np.arange(0, samples_length)
-    CFO_mult_n = np.multiply(CFO_cum, n)
-
-    # cosine_arr = np.cos(2 * np.pi * CFO_mult_n * Ts)
-    # sine_arr = np.sin(2 * np.pi * CFO_mult_n * Ts)
-    # realval_withCFO = np.multiply(np.real(samples), cosine_arr) - \
-    #                  np.multiply(np.imag(samples), sine_arr)
-    # imagval_withCFO = np.multiply(np.real(samples), sine_arr) + \
-    #                  np.multiply(np.imag(samples), cosine_arr)
-    # potentially replace lines 38 to 41 with the following two lines
-    exp_val = np.exp(1j * 2 * np.pi * CFO_mult_n * Ts)
-    samples_withCFO = np.multiply(exp_val, samples)
-    realval_withCFO = np.real(samples_withCFO)
-    imagval_withCFO = np.imag(samples_withCFO)
-    # Apply SRO
-    # Ferr is difference between the TX DAC and RX ADC clocks rates.
-    # we are resampling for this difference.
-    SROCFObias_scaling = clockeffects_dict['SROMaxdev'] / clockeffects_dict['CFOMaxdev']
-    # Note that the source of error is common for both CFO and SRO - XO crystal.
-    ferr_bias_SRO = ferr_bias_CFO * SROCFObias_scaling
-    # np.random.uniform(-clockeffects_dict['SROMaxdev'], clockeffects_dict['SROMaxdev'])
-    SRO_cum = np.cumsum(clockerror_randomsamples * clockeffects_dict['SROstddev']) + ferr_bias_SRO
-    # n = np.arange(0,n = np.arange(0,L))
-    # CFO_SRO_mult_n = np.multiply(SRO_cum, n)
-    Ts_range = np.linspace(0, samples_length * Ts, samples_length)  # np.arange(0, samples_length * Ts, Ts)
-    Fs_prime = SRO_cum  # Diff freq error at different time steps.
-    Ts_prime = np.reciprocal(Fs_prime + samp_rate)
-    Ts_prime_range = np.cumsum(Ts_prime)
-    f_imag = interpolate.interp1d(Ts_range, imagval_withCFO, fill_value='extrapolate')
-    f_real = interpolate.interp1d(Ts_range, realval_withCFO, fill_value='extrapolate')
-    samples_clockeffect_real = f_real(Ts_prime_range)
-    samples_clockeffect_imag = f_imag(Ts_prime_range)
-    samples_clockeffect = samples_clockeffect_real + 1j * samples_clockeffect_imag
-    return samples_clockeffect
+######### INPUT PARAMETERS #####################
+# AI: potentially move this to a JSON file
 
 
-def phaseOffset(samples, seed):
-    # theta = np.random.uniform(0,2*np.pi)
-    np.random.seed(seed)  # setting the random seed
-    # To check if the seed has been set, use the command np.random.get_state()[1][0]
-    phaseOffsetVal = np.random.uniform(0, 2 * np.pi)
-    samples_phaseOffset = np.multiply(samples, np.exp(1j * phaseOffsetVal))
-    return samples_phaseOffset
+## General signal parameters
+f_c = 1e9 # Center frequency
+clockrate = 100e6 # assuming usage of USRP N310, assuming a ADC and DAC clock rate equal to max analog bandwidth.
+audio_rate = 44.1e3
+samples_per_symbol = 2 #Upsampling factor
+Tsym_LTE = 71.3e-6# Tsym for LTE is 71.3 microseconds.
+# Samp_rate caluclated as = 8/71.3 (8 is the upsampling factor - i.e. Number of samples per symbol)
+samp_rate = samples_per_symbol/Tsym_LTE#112.2e3
+Ts = 1 / samp_rate  # sample interval
+
+# Modulation parameters
+excess_bandwidth = 0.35
+modulation_index_CPFSK = 0.5
+bandwidth_time_product = 0.3 # source for BT value chosen: https://comblock.com/download/com1028.pdf
+sensitivity_GFSK = 1.57 # approx to pi/2.
+output_stream_rate_WBFM = math.ceil(samp_rate/audio_rate)*audio_rate
+max_freq_dev_WBFM = 75e3 # wideband FM freq deviation typical value - chosen from https://en.wikipedia.org/wiki/Frequency_modulation
+tau=75e-6 # preemphasis time constant (default 75e-6), value used frorm https://github.com/gnuradio/gnuradio/blob/master/gr-analog/python/analog/wfm_tx.py
 
 
+# Dataset simulation parameters
 dataset = {}
 if len(sys.argv) < 2:
     numFrames_permodsnr = 1000  # Number of frames per modulation type and SNR.
 else:
     numFrames_permodsnr = int(sys.argv[1])
 frame_length = 128  # length of a frame.
-snr_levels = range(-20, 21, 2)
 transients = 1000  # typically after channel, clock effects are applied, the output has trasients for
 # the first 500 odd samples that need to be ignored.
 # In a long array fo samples post effects such as clock,AWGN,fading etc., we iteratively carve chunks of samples equal to frame_length.
 # and jump by an increment that is decided by the samples_incrementscale.
 samples_incrementscale = 0.05
-
-audio_rate = 44.1e3
 # The audio source file has almost no signal for the first few seconds.
 analog_transients = int(audio_rate * 5)
 # Samples of digitalsample_len will be passed through modulation, AWGN, ClockEffects, Fading blocks.
 # A single frame will be carved out with a randomly placed window,
 # with a minimum offset of transients out of signal of length digitalsample_len.
-digitalsample_len = frame_length * 100 + transients
+num_IF_perstream = 50 # A stream of this many frames are created and IFs carved out. Therefore the lower this value is, more likely the IFs will be more indepenedent of each other, since for each stream a separate instantiation of artifacts are initiated.
+digitalsample_len = frame_length * num_IF_perstream + transients
 
-# clean - only the modulated signal
-# AWGN - additive thermal noise applied to clean modulated signal for specified SNR levels.
-# AWGN_clock - AWGN and errors due to clock drifts - center frequency offset (CFO) and sample rate offset (SRO)
-# applied.
-datasettype_list = ["clean", "AWGN", "AWGN_clock", "all"]
-fD = 70  # ETU70, max doppler ferquency/frequency devaition - 70Hz.
-# Tsym for LTE is 71.3 microseconds.
-# Samp_rate caluclated as = 8/71.3 (8 is the upsampling factor - i.e. umber of samples per symbol)
-samp_rate = 112.2e3
-Ts = 1 / samp_rate  # sample time
+
+""""
+clean - only the modulated signal with pulse shaping whereever applicable
+AWGNOnly - Apply additive thermal noise applied to clean modulated signal for specified SNR levels, to the modulated signal.
+Clock Only - Apply errors due to clock drifts - center frequency offset (CFO) and sample rate offset (SRO) and phase offset to the modulated signal.
+FadingOnly - Apply fading effects only to the modulation signals.
+All - All effects in the order of SRO->Fading->CFO->Phase offset-> AWGN
+"""
+datasettype_list = ['clean','AWGNOnly','ClockOnly','FadingOnly','All'] #['clean’,’AWGNOnly’,’ClockOnly’,’FadingOnly’,’All']
+# 
+
+
+## Signal artifact parameters
+
+#AWGN
+snr_levels = range(-20, 21, 2)
+
+#Fading
 # delays in nanoseconds converted into fractional sample delays. Ech sample delay Ts = 9 micro seconds approx.
 delays = [val_temp * (1e-9) * samp_rate for val_temp in [0, 50, 120, 200, 230, 500, 1600, 2300, 5000]]
 mags_dB = [-1, -1, -1, 0, 0, 0, -3, -5, -7]
 mags = [10 ** (mags_val / 20.0) for mags_val in mags_dB]
+fD = 70  # ETU70, max doppler ferquency/frequency devaition - 70Hz.
 ntaps = 8
 numSinusoids = 8
-Kfactor = 4
-# noise_amp = 10 ** (-snr / 20.0)
-clockeffects_dict = {}
-clockeffects_dict['CFOMaxdev'] = 500
-# Say signal CF is 900MHZ - LO freq is 900MHZ. The CFOMax dev at 900MHz is 500Hz.
-# The ADC clocks rates from datasheet of N310 is 122.88MHz.
-# SRO Max dev is therefore calculated as 500*122.88/900 = 68.27 = 70Hz approx.
-clockeffects_dict['SROMaxdev'] = 70
-clockeffects_dict['SROstddev'] = 0.01
-clockeffects_dict['CFOstddev'] = 0.01
 LOS = False  # Rayleigh channel, no LOS component
+Kfactor = 4
+
+## Clock effects
+clockeffects_dict = {}
+clockeffects_dict['XOFreq'] = 10e6
+clockeffects_dict['XO_standardDeviation'] = 1e-4
+clockeffects_dict['XO_maxdeviation'] = 5
+clockeffects_dict['LOScalingFactor'] = f_c/clockeffects_dict['XOFreq']
+clockeffects_dict['TimetickScalingFactor'] = clockrate/clockeffects_dict['XOFreq']
+clockeffects_dict['CFO_standardDeviation'] = clockeffects_dict['XO_standardDeviation']*clockeffects_dict['LOScalingFactor']
+clockeffects_dict['SRO_standardDeviation'] = clockeffects_dict['XO_standardDeviation']*clockeffects_dict['TimetickScalingFactor']
+clockeffects_dict['CFO_maxdeviation'] = clockeffects_dict['XO_maxdeviation']*clockeffects_dict['LOScalingFactor']
+clockeffects_dict['SRO_maxdeviation'] = clockeffects_dict['XO_maxdeviation']*clockeffects_dict['TimetickScalingFactor']
+
+
+
+
+
 
 # Analog data is large and takes time to read. Therefore done once in the beginning and random windows
 # used to extract samples for each input frame.
 # NOTE: If there are issues loading the large audio file such as RAM being filled up,
 # you can use any smaller sized audio file.
 
-
+print("Loading analog samples as an one time operation. Please be patient.")
 tb = gr.top_block()
-src_cont = source_alphabet("continuous", 1000)
+src_cont = source_alphabet("continuous")
 snk_cont = blocks.vector_sink_f()
 tb.connect(src_cont, snk_cont)
 tb.run()
-# data = np.array(snk.data(), dtype=np.complex64)
-# print(data[0:10])
 
-
-# tb_analogdata = gr.top_block()
-# src_analogdata = source_alphabet("continuous", 1000)
-# snk_analogdata = blocks.vector_sink_f()
-# tb_analogdata.connect(src_analogdata, snk_analogdata)
-# tb_analogdata.run()
 analogdata = np.array(snk_cont.data(), dtype=np.complex64)
 len_analogdata = analogdata.shape[0]
-# tb = gr.top_block()
-# src = source_alphabet("continuous", 1000)
-# snk = blocks.vector_sink_f()
-# tb.connect(src,snk)
-# tb.run()
-# data = np.array(snk.data(), dtype=np.complex64)
-
-
-# analogdata = np.array(snk.data(), dtype=np.complex64)
-# len_analogdata = analogdata.shape[0]
-
+print("Finished loading analog samples.")
 
 seed = 0
-# datasettype = datasettype_list[3]
+
 print("changed datasettype_list to all")
 for datasettype in datasettype_list:#datasettype_list:
     print("Datasettype is :", datasettype)
     for modulation_flavour in list(transmitters.keys()):
         for modulation_type, snr in product(list(transmitters[modulation_flavour]), snr_levels):
             dataset[(modulation_type.modname, snr)] = np.zeros([numFrames_permodsnr, 2, frame_length], dtype=np.float32)
+            ct = datetime.datetime.now()
+            print("Generating data for Modulation type: ", modulation_type.modname," and snr: ", snr, " at time ", ct)
+            frame_idx = 0
+            noise_amp = 10 ** (-snr / 20.0)  # you need to divide by 20 instead of 10 to get the correct SNR.
+            while frame_idx < numFrames_permodsnr:
+                # print(modulation_flavour,modulation_type,snr,frame_idx)
 
-    for modulation_flavour in list(transmitters.keys()):
+                np.random.seed(seed)  # setting the random seed
+                # To check if the seed has been set, use the command np.random.get_state()[1][0]
 
-        for modulation_type in list(transmitters[modulation_flavour]):
+                if modulation_type.modname == 'GFSK':
+                    mod = modulation_type(samples_per_symbol,sensitivity_GFSK,bandwidth_time_product)
+                elif modulation_type.modname == 'CPFSK':
+                    mod = modulation_type(modulation_index_CPFSK,samples_per_symbol)
+                elif modulation_type.modname == 'WBFM':
+                    mod = modulation_type(audio_rate, output_stream_rate_WBFM, tau,max_freq_dev_WBFM)
+                elif (modulation_type.modname == 'AM-DSB') or (modulation_type == 'AM-SSB'):
+                    mod = modulation_type(audio_rate, samp_rate)
+                else:
+                    mod = modulation_type(samples_per_symbol, excess_bandwidth)  # in the modified transmitter file, change
+                add_block = blocks.add_vcc(1)
+                noise_block = analog.noise_source_c(analog.GR_GAUSSIAN, noise_amp, seed)
 
-            for snr in snr_levels:
-                ct = datetime.datetime.now()
-                print("Generating data for Modulation type: ", modulation_type.modname," and snr: ", snr, " at time ", ct)
-                frame_idx = -1
-                # seed = seed + 1  # different seed for different frames
-                noise_amp = 10 ** (-snr / 20.0)  # you need to divide by 20 instead of 10 to get the correct SNR.
-                while frame_idx < numFrames_permodsnr:
-                    # print(modulation_flavour,modulation_type,snr,frame_idx)
+                snk = blocks.vector_sink_c()
+                fading_block = channels.selective_fading_model(numSinusoids, fD / samp_rate, LOS, Kfactor, \
+                                                               seed, delays, mags, ntaps)
+                tb = gr.top_block()
 
-                    # Random seed generated - to seed digital source generation, analog source generation,
-                    # AWGN noise generation, fading channel simulation, CFO/SRO simulation and phase offset simulation.
-                    # seed = seed_itr
-                    np.random.seed(seed)  # setting the random seed
-                    # To check if the seed has been set, use the command np.random.get_state()[1][0]
-                    mod = modulation_type()  # in the modified transmitter file, change
-                    add_block = blocks.add_vcc(1)
-                    noise_block = analog.noise_source_c(analog.GR_GAUSSIAN, noise_amp, seed)
+                if modulation_flavour == "discrete":
+                    np.random.seed(seed)
+                    src = source_alphabet("discrete", digitalsample_len, seed)
+                elif modulation_flavour == "continuous":
+                    # the first 5 seconds and last 60 seconds of the audio recording is ignored. The idx is the staring
+                    # point for carving a sample stream for continuous type modulation.
+                    np.random.seed(seed)
+                    idx_analogdata = np.random.randint(analog_transients, len_analogdata - int(audio_rate * 60))
+                    # For analog source, we simply are using the real part of the audio signal.
+                    # This is also consistent with the implementation by Oshea who also uses only the real part,when using
+                    # a complextofloat block.
+                    analogdata_sample = np.real(analogdata[idx_analogdata:idx_analogdata + digitalsample_len])
+                    src = blocks.vector_source_f(analogdata_sample, False, 1, [])
+                    # Bock signature:  gnuradio.blocks.vector_source_f(data, repeat = False, vlen = 1, tags)
 
-                    snk = blocks.vector_sink_c()
-                    fading_block = channels.selective_fading_model(numSinusoids, fD / samp_rate, LOS, Kfactor, \
-                                                                   seed, delays, mags, ntaps)
-                    tb = gr.top_block()
 
-                    if modulation_flavour == "discrete":
-                        np.random.seed(seed)
-                        src = source_alphabet("discrete", digitalsample_len, seed)
-                    elif modulation_flavour == "continuous":
-                        # the first 5 seconds and last 60 seconds of the audio recording is ignored. The idx is the staring
-                        # point for carving a sample stream for continuous type modulation.
-                        np.random.seed(seed)
-                        idx_analogdata = np.random.randint(analog_transients, len_analogdata - int(audio_rate * 60))
-                        # For analog source, we simply are using the real part of the audio signal.
-                        # This is also consistent with the implementation by Oshea who also uses only the real part,when using
-                        # a complextofloat block.
-                        analogdata_sample = np.real(analogdata[idx_analogdata:idx_analogdata + digitalsample_len])
-                        src = blocks.vector_source_f(analogdata_sample, False, 1, [])
-                    if datasettype == 'clean':
-                        tb.connect(src, mod, snk)
-                    elif (datasettype == 'AWGN') or (datasettype == 'AWGN_clock'):
-                        # Apply AWGN only now for both the datasettype
-                        tb.connect(src, mod)
-                        tb.connect(noise_block, (add_block, 1))
-                        tb.connect(mod, (add_block, 0))
-                        tb.connect(add_block, snk)
-                    elif datasettype == 'all':
-                        tb.connect(noise_block, (add_block, 1))
-                        tb.connect(src, mod, (add_block, 0))
-                        tb.connect(add_block, fading_block, snk)
+                ## XO value generation. This value will be passed onto SRO and CFO blocks where this will be scaled.
+                ferr_bias_XO = np.random.uniform(-clockeffects_dict['XO_maxdeviation'] + clockeffects_dict['XO_standardDeviation'],\
+                                                 clockeffects_dict['XO_maxdeviation'] - clockeffects_dict['XO_standardDeviation'])
+                # digitalsample_len is the length of input source. This is modulated and upsampled. Therefore the XO value length that is applied to the modulated upsampled symbols should be of appropriate length of the upsampled modulated samples.
+                XO_val_len = digitalsample_len*samples_per_symbol+10
+                XO_val = np.zeros((XO_val_len,))
+                XO_val[0] = clockeffects_dict['XO_standardDeviation'] * np.random.randn(1, ) + ferr_bias_XO
+                # Check to ensure that CFO is contained within maximum deviation.
+                while (XO_val[0] > clockeffects_dict['XO_maxdeviation']) or (XO_val[0] < -clockeffects_dict['XO_maxdeviation']):
+                    XO_val[0] = clockeffects_dict['XO_standardDeviation'] * np.random.randn(1, ) + ferr_bias_XO
+
+                for i in range(1, XO_val_len):
+                    XO_val[i] = clockeffects_dict['XO_standardDeviation'] * np.random.randn(1, ) + XO_val[i - 1]
+                    # Check to ensure that CFO is contained within maximum deviation.
+                    while (XO_val[i] > clockeffects_dict['XO_maxdeviation']) or (XO_val[i] < -clockeffects_dict['XO_maxdeviation']):
+                        XO_val[i] = clockeffects_dict['XO_standardDeviation'] * np.random.randn(1, ) + XO_val[i - 1]
+
+
+                if datasettype == 'clean':
+                    tb.connect(src, mod, snk)
                     tb.run()
-                    # tb.stop()
-                    samples_allEffects = np.array(snk.data(), dtype=np.complex64)
-                    # remove transients from the samples post fading.
-                    samples_allEffects = samples_allEffects[transients:]
-                    len_sampAlleffects = samples_allEffects.shape[0]
+                    samples = np.array(snk.data(), dtype=np.complex64)
+                elif datasettype == 'AWGNOnly':
+                    tb.connect(src, mod)
+                    tb.connect(noise_block, (add_block, 1))
+                    tb.connect(mod, (add_block, 0))
+                    tb.connect(add_block, snk)
+                    tb.run()
+                    samples = np.array(snk.data(), dtype=np.complex64)
+                elif datasettype == 'ClockOnly':
+                    # Apply SRO followed by CFO followed by phase offset
+                    tb.connect(src, mod, snk)
+                    tb.run()
+                    samples_mod = np.array(snk.data(), dtype=np.complex64)
+                    samples_SRO = SROArtifact(samples_mod, XO_val, clockeffects_dict, samp_rate)
+                    samples_SRO_CFO = CFOArtifact(samples_SRO, XO_val, clockeffects_dict, samp_rate)
+                    samples_allClockArtifacts = phaseOffset(samples_SRO_CFO, seed)
+                    samples = samples_allClockArtifacts
+                elif datasettype == 'FadingOnly':
+                    # Apply fading only
+                    tb.connect(src, mod, fading_block, snk)
+                    tb.run()
+                    samples = np.array(snk.data(), dtype=np.complex64)
+                elif datasettype == 'All':
+                    tb.connect(src, mod, snk)
+                    tb.run()
+                    samples_clean = np.array(snk.data(), dtype=np.complex64)
+                    samples_SRO = SROArtifact(samples_clean, XO_val, clockeffects_dict, samp_rate)
+                    samples_SRO_src_block = blocks.vector_source_c(samples_SRO, False, 1, [])
+                    snk2 = blocks.vector_sink_c()
+                    tb.connect(samples_SRO_src_block, fading_block, snk2)
+                    tb.run()
+                    samples_SRO_Fading = np.array(snk2.data(), dtype=np.complex64)
+                    samples_SRO_Fading_CFO = CFOArtifact(samples_SRO_Fading, XO_val, clockeffects_dict, samp_rate)
+                    samples_SRO_Fading_CFO_Phaseoffset = phaseOffset(samples_SRO_Fading_CFO, seed)
+
+                    samples_SRO_Fading_CFO_Phaseoffset_block = blocks.vector_source_c(samples_SRO_Fading_CFO_Phaseoffset, False, 1, [])
+                    # tb.connect(src, mod)
+                    snk3 = blocks.vector_sink_c()
+                    tb.connect(noise_block, (add_block, 1))
+                    tb.connect(samples_SRO_Fading_CFO_Phaseoffset_block, (add_block, 0))
+                    tb.connect(add_block, snk3)
+                    tb.run()
+                    samples_alleffects = np.array(snk3.data(), dtype=np.complex64)
+                    samples = samples_alleffects
+
+                # remove transients from the samples post fading.
+                samples = samples[transients:]
+                len_sampAlleffects = samples.shape[0]
+
+                np.random.seed(seed)
+                incr_idx = np.random.randint(0,int(len_sampAlleffects*samples_incrementscale))
+                start_idx = 0
+                start_idx = start_idx + incr_idx
+                #frame_idx = frame_idx + 1
+                while (start_idx +frame_length < len_sampAlleffects) and (frame_idx < numFrames_permodsnr):
+                    frame_allEffects = samples[start_idx:start_idx+frame_length]
+                    dataset[(modulation_type.modname, snr)][frame_idx, 0, :] = np.real(frame_allEffects)
+                    dataset[(modulation_type.modname, snr)][frame_idx, 1, :] = np.imag(frame_allEffects)
+                    seed = seed + 1
                     np.random.seed(seed)
                     incr_idx = np.random.randint(0,int(len_sampAlleffects*samples_incrementscale))
-                    start_idx = 0
-                    start_idx = start_idx + incr_idx
+                    start_idx = start_idx + incr_idx + frame_length
+                    #print(start_idx,frame_idx)
                     frame_idx = frame_idx + 1
-                    while (start_idx +frame_length < len_sampAlleffects) and (frame_idx < numFrames_permodsnr):
-                        frame_allEffects = samples_allEffects[start_idx:start_idx+frame_length]
+#                     print(frame_idx,seed)
 
-                        if (datasettype == 'AWGN_clock') or (datasettype == 'all'):
-                            frame_allEffects = clockEffects(frame_allEffects, clockeffects_dict, samp_rate, seed)
-                        if (datasettype == 'AWGN') or (datasettype == 'AWGN_clock') or (datasettype == 'all'):
-                            frame_allEffects = phaseOffset(frame_allEffects, seed)
+                #frame_idx = frame_idx - 1
+#                 seed = seed - 1
+#                 print("Outside while loop")
+#                 print(frame_idx,seed)
 
-                        dataset[(modulation_type.modname, snr)][frame_idx, 0, :] = np.real(frame_allEffects)
-                        dataset[(modulation_type.modname, snr)][frame_idx, 1, :] = np.imag(frame_allEffects)
-
-                        seed = seed + 1
-                        np.random.seed(seed)
-                        incr_idx = np.random.randint(0,int(len_sampAlleffects*samples_incrementscale))
-                        start_idx = start_idx + incr_idx + frame_length
-                        #print(start_idx,frame_idx)
-                        frame_idx = frame_idx + 1
-
-                frame_idx = frame_idx - 1
-                seed = seed - 1
-
-
-
-                    # if (datasettype == 'AWGN_clock') or (datasettype == 'all'):
-                    #     samples_allEffects = clockEffects(samples_allEffects, clockeffects_dict, samp_rate, seed)
-                    #
-                    # if (datasettype == 'AWGN') or (datasettype == 'AWGN_clock') or (datasettype == 'all'):
-                    #     samples_allEffects = phaseOffset(samples_allEffects, seed)
-
-
-                    # if modulation_type.modname == 'WBFM':
-                    # time.sleep(1)
-                    #     import matplotlib.pyplot as plt
-                    #     plt.plot(np.real(samples_channeleffect), np.imag(samples_channeleffect))
-                    #     plt.show()
-
-                    # np.random.seed(seed)
-                    # start_idx = np.random.randint(transients, samples_allEffects.shape[0] - frame_length - 1)
-                    # dataset[(modulation_type.modname, snr)][frame_idx, 0, :] = \
-                    #     np.real(samples_allEffects[start_idx:start_idx + frame_length])
-                    # dataset[(modulation_type.modname, snr)][frame_idx, 1, :] = \
-                    #     np.imag(samples_allEffects[start_idx:start_idx + frame_length])
     filelocation = ""
     savefilename = filelocation + "AMC2021" + datasettype + ".01A"
     outfile1 = open(savefilename, 'wb')
@@ -286,4 +273,10 @@ for datasettype in datasettype_list:#datasettype_list:
     # ct stores current time
     ct = datetime.datetime.now()
     print(ct)
+#     outfile1 = open(savefilename + '_Params.txt', 'at')
+#     outfile1.write(str(TrainParams))
+#     outfile1.write("\n \n")
+#     outfile1.write(str(DatasetParams))
+#     #pickle.dump(dataset, outfile1)
+#     outfile1.close()
 
