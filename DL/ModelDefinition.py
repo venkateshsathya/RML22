@@ -5,7 +5,7 @@ import torch.nn.functional as func
 import torch.nn.init as torch_init
 #import torch.optim as optim
 
-class ModulationPredictionCNN128_Nov9th2021(nn.Module):
+class ModelDefinition(nn.Module):
     """ A one dimensional convolutional neural network model.
 
     Consists of six Conv1d layers, followed by max pooling
@@ -19,7 +19,7 @@ class ModulationPredictionCNN128_Nov9th2021(nn.Module):
     """
 
     def __init__(self,num_classes, activation='relu'):
-        super(ModulationPredictionCNN128_Nov9th2021, self).__init__()
+        super(ModelDefinition, self).__init__()
         self.activation = activation
         conv_kernel_size = 3
         conv_padding = 1
