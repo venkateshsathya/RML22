@@ -279,4 +279,3 @@ for datasettype in datasettype_list:#datasettype_list:
 #     outfile1.write(str(DatasetParams))
 #     #pickle.dump(dataset, outfile1)
 #     outfile1.close()
-
