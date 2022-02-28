@@ -19,7 +19,7 @@ class source_alphabet(gr.hier_block2):
             gr.hier_block2.__init__(self, "source_alphabet",
                 gr.io_signature(0,0,0),
                 gr.io_signature(1,1,gr.sizeof_float))
-            self.src = blocks.wavfile_source('source_material/audio_source.wav', False)
+            self.src = blocks.wavfile_source('Podcast.wav', False)
             self.limit = blocks.head(gr.sizeof_float, limit)
             last = self.src
         if dtype=="discrete":   
