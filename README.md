@@ -1,7 +1,7 @@
 ### RML22 Dataset direct download [link](https://drive.google.com/drive/folders/1awGJyI7D-IvWZXKW9-llc6p08owTG28Q?usp=sharing).
 
 
-![alt text](https://github.com/[venkateshsathya]/[RML22]/blob/[main]/image.jpg?raw=true)
+![alt text](https://github.com/[venkateshsathya]/[RML22]/blob/[main]/GitHubREADME_1.png?raw=true)
 
 
 ### RML22 Dataset generation code details
