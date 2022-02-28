@@ -8,11 +8,12 @@
 
 ##### **Instructions to run the code.**
 
-1. Copy the files to a folder.
-2. Copy the analog source .wav file from this [link](https://drive.google.com/file/d/1O6LmLO2kw9b_nTPl7z7EthvC0HpTZ-Iz/view?usp=sharing)
-3. Create a folder named "source_material" and push the file audio_source.wav to this folder.
-4. *$python Datasetgeneration_Fast.py* generates four types of datasets for the following SNR and modulation types. 1000 frames are generated per modulation per SNR.
-5. The four types of datasets are clean(no artifacts), with thermal noise only (AWGN), with thermal noise and clock effects(SRO/CFO) and the final one includes fading on top of all other artifacts.
+1. Copy the files under the folder "code" to a local folder "RML22_code".
+2. Copy the Podcast.wav file from this [link](https://drive.google.com/drive/folders/13Ot0MOifZYGjEyTh4EQNwvFI6hXnhu3i?usp=sharing) to "RML22_code". This file is the information source for analog modulation types.
+4. This notebook contains cells with code to generate dataset, train on CNN architecure, test and plot results: accuracy versus SNR and confusion matrix. By default it generates RML22 dataset in the first of the notebook. The second cell trains a CNN model with an architecture and training parameters as shown below
+
+![alt text](https://github.com/venkateshsathya/RML22/blob/main/DL_Architecture_TrainingParameters.png?raw=true)
+6. The four types of datasets are clean(no artifacts), with thermal noise only (AWGN), with thermal noise and clock effects(SRO/CFO) and the final one includes fading on top of all other artifacts.
 
 
 ##### **Instructions to install GNURadio module and out-of-tree GR-MAPPER module.**  :cowboy_hat_face:
