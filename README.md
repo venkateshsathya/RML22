@@ -16,6 +16,7 @@
 5. The third cell tests and plots accuracy versus SNR and a confusion matrix.
 6. The five types of datasets that could be generated are clean(no artifacts), with thermal noise over clean dataset (AWGN), with clock effects(SRO/CFO/phase offset) on clean dataset, with fading over clean dataset and the final one RML22 with all artifacts. The default code generates RML22.
 
+### To generate your own dataset, you need the following GNU radio dependencies. You can also skip installing the dependencies if you do not wish to generate your own dataset and directly download [RML22](https://drive.google.com/drive/folders/1awGJyI7D-IvWZXKW9-llc6p08owTG28Q?usp=sharing) and train your model on this.
 
 ##### **Instructions to install GNURadio module and out-of-tree GR-MAPPER module.**  :cowboy_hat_face:
 ```
