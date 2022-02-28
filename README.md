@@ -13,7 +13,8 @@
 4. This notebook contains cells with code to generate dataset, train on CNN architecure, test and plot results: accuracy versus SNR and confusion matrix. By default it generates RML22 dataset in the first of the notebook. The second cell trains a CNN model with an architecture and training parameters as shown below
 
 ![alt text](https://github.com/venkateshsathya/RML22/blob/main/DL_Architecture_TrainingParameters.png?raw=true)
-6. The four types of datasets are clean(no artifacts), with thermal noise only (AWGN), with thermal noise and clock effects(SRO/CFO) and the final one includes fading on top of all other artifacts.
+5. The third cell tests and plots accuracy versus SNR and a confusion matrix.
+6. The five types of datasets that could be generated are clean(no artifacts), with thermal noise over clean dataset (AWGN), with clock effects(SRO/CFO/phase offset) on clean dataset, with fading over clean dataset and the final one RML22 with all artifacts. The default code generates RML22.
 
 
 ##### **Instructions to install GNURadio module and out-of-tree GR-MAPPER module.**  :cowboy_hat_face:
