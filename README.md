@@ -1,4 +1,4 @@
-### RML22 Dataset direct download [link](https://drive.google.com/drive/folders/1awGJyI7D-IvWZXKW9-llc6p08owTG28Q?usp=sharing).
+### RML22 Dataset direct download [link](https://drive.google.com/drive/folders/1dEv6gPwPahUfFFRYYxvp3i5M34D7KI9J?usp=sharing).
 
 This code is inspired by and reuses part of the code from [RADIOML](https://github.com/radioML/dataset), [DeepSig](https://www.deepsig.ai/datasets)
 ![alt text](https://github.com/venkateshsathya/RML22/blob/main/GitHubREADME_1.png?raw=true)
@@ -9,14 +9,14 @@ This code is inspired by and reuses part of the code from [RADIOML](https://gith
 ##### **Instructions to run the code.**
 
 1. Copy the files under the folder "code" to a local folder "RML22_code".
-2. Copy the Podcast.wav file from this [link](https://drive.google.com/drive/folders/13Ot0MOifZYGjEyTh4EQNwvFI6hXnhu3i?usp=sharing) to "RML22_code". This file is the information source for analog modulation types.
+2. Copy the Podcast.wav file from this [link](https://drive.google.com/drive/folders/1dEv6gPwPahUfFFRYYxvp3i5M34D7KI9J?usp=sharing) to "RML22_code". This file is the information source for analog modulation types.
 4. This notebook contains cells with code to generate dataset, train on CNN architecure, test and plot results: accuracy versus SNR and confusion matrix. By default it generates RML22 dataset in the first of the notebook. The second cell trains a CNN model with an architecture and training parameters as shown below
 
 ![alt text](https://github.com/venkateshsathya/RML22/blob/main/DL_Architecture_TrainingParameters.png?raw=true)
 5. The third cell tests and plots accuracy versus SNR and a confusion matrix.
 6. The five types of datasets that could be generated are clean(no artifacts), with thermal noise over clean dataset (AWGN), with clock effects(SRO/CFO/phase offset) on clean dataset, with fading over clean dataset and the final one RML22 with all artifacts. The default code generates RML22.
 
-### To generate your own dataset, you need the following GNU radio dependencies. You can also skip installing the dependencies if you do not wish to generate your own dataset and directly download [RML22](https://drive.google.com/drive/folders/1awGJyI7D-IvWZXKW9-llc6p08owTG28Q?usp=sharing) and train your model on this.
+### To generate your own dataset, you need the following GNU radio dependencies. You can also skip installing the dependencies if you do not wish to generate your own dataset and directly download [RML22](https://drive.google.com/drive/folders/1dEv6gPwPahUfFFRYYxvp3i5M34D7KI9J?usp=sharing) and train your model on this.
 
 ##### **Instructions to install GNURadio module and out-of-tree GR-MAPPER module.**  :cowboy_hat_face:
 ```
